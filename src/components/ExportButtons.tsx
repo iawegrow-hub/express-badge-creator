@@ -3,7 +3,7 @@ import { Download, FileImage, FileText, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { BADGE_CONFIG } from "./BadgePreview";
+import { SLOT_PCT, NAME_PCT, ROLE_PCT } from "./BadgePreview";
 
 interface ExportButtonsProps {
   photo: string | null;
@@ -20,91 +20,98 @@ export const ExportButtons = ({ photo, name, position, onReset }: ExportButtonsP
   const generateBadgeCanvas = (): Promise<HTMLCanvasElement> => {
     return new Promise((resolve) => {
       const canvas = document.createElement("canvas");
-      canvas.width = BADGE_CONFIG.width;
-      canvas.height = BADGE_CONFIG.height;
       const ctx = canvas.getContext("2d")!;
 
-      const drawComplete = () => {
-        // Desenhar foto se disponível
-        if (photo) {
-          const img = new Image();
-          img.onload = () => {
-            const { x, y, width, height } = BADGE_CONFIG.photoArea;
-            
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, y, width, height);
-            ctx.clip();
+      // Carregar template e definir dimensões
+      const bgImage = new Image();
+      bgImage.onload = () => {
+        // Definir canvas com tamanho natural do template
+        canvas.width = bgImage.naturalWidth;
+        canvas.height = bgImage.naturalHeight;
+        
+        // Desenhar template de fundo
+        ctx.drawImage(bgImage, 0, 0);
+        
+        // Calcular constantes em pixels baseadas no tamanho do template
+        const W = bgImage.naturalWidth;
+        const H = bgImage.naturalHeight;
+        
+        const SLOT = { 
+          x: Math.round(W * SLOT_PCT.x), 
+          y: Math.round(H * SLOT_PCT.y),
+          w: Math.round(W * SLOT_PCT.w), 
+          h: Math.round(H * SLOT_PCT.h) 
+        };
+        const NAME = { 
+          x: W * NAME_PCT.x, 
+          y: H * NAME_PCT.y, 
+          size: Math.round(W * NAME_PCT.size),
+          ...NAME_PCT 
+        };
+        const ROLE = { 
+          x: W * ROLE_PCT.x, 
+          y: H * ROLE_PCT.y, 
+          size: Math.round(W * ROLE_PCT.size),
+          ...ROLE_PCT 
+        };
 
-            const scale = Math.max(width / img.width, height / img.height);
-            const scaledWidth = img.width * scale;
-            const scaledHeight = img.height * scale;
-            const offsetX = (width - scaledWidth) / 2;
-            const offsetY = (height - scaledHeight) / 2;
+        const drawComplete = () => {
+          // Desenhar foto se disponível
+          if (photo) {
+            const img = new Image();
+            img.onload = () => {
+              // Desenhar foto com "cover" (preencher sem distorcer)
+              ctx.save();
+              
+              // Criar clip arredondado
+              const radius = Math.min(SLOT.w, SLOT.h) * 0.06;
+              ctx.beginPath();
+              ctx.roundRect(SLOT.x, SLOT.y, SLOT.w, SLOT.h, radius);
+              ctx.clip();
 
-            ctx.drawImage(img, x + offsetX, y + offsetY, scaledWidth, scaledHeight);
-            ctx.restore();
+              // Calcular escala cover
+              const scale = Math.max(SLOT.w / img.width, SLOT.h / img.height);
+              const dw = Math.ceil(img.width * scale);
+              const dh = Math.ceil(img.height * scale);
+              const dx = SLOT.x + Math.round((SLOT.w - dw) / 2);
+              const dy = SLOT.y + Math.round((SLOT.h - dh) / 2);
 
+              ctx.drawImage(img, dx, dy, dw, dh);
+              ctx.restore();
+
+              drawTexts();
+              resolve(canvas);
+            };
+            img.src = photo;
+          } else {
             drawTexts();
             resolve(canvas);
-          };
-          img.src = photo;
-        } else {
-          drawTexts();
-          resolve(canvas);
-        }
-      };
-
-      const drawTexts = () => {
-        // Configurar sombra para texto
-        ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-        ctx.shadowBlur = 2;
-        ctx.shadowOffsetX = 1;
-        ctx.shadowOffsetY = 1;
-
-        // Desenhar nome
-        if (name.trim()) {
-          ctx.fillStyle = BADGE_CONFIG.nameArea.color;
-          ctx.font = `${BADGE_CONFIG.nameArea.fontSize}px ${BADGE_CONFIG.nameArea.fontFamily}`;
-          ctx.textAlign = BADGE_CONFIG.nameArea.align;
-          ctx.fillText(name.trim(), BADGE_CONFIG.nameArea.x, BADGE_CONFIG.nameArea.y);
-        }
-
-        // Desenhar função
-        if (position.trim()) {
-          ctx.fillStyle = BADGE_CONFIG.positionArea.color;
-          ctx.font = `${BADGE_CONFIG.positionArea.fontSize}px ${BADGE_CONFIG.positionArea.fontFamily}`;
-          ctx.textAlign = BADGE_CONFIG.positionArea.align;
-          ctx.fillText(position.trim(), BADGE_CONFIG.positionArea.x, BADGE_CONFIG.positionArea.y);
-        }
-      };
-
-      if (templateImage) {
-        const bgImage = new Image();
-        bgImage.onload = () => {
-          ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
-          drawComplete();
+          }
         };
-        bgImage.src = templateImage;
-      } else {
-        // Fundo temporário
-        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        gradient.addColorStop(0, "#3B82F6");
-        gradient.addColorStop(1, "#1E40AF");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Área da foto
-        ctx.fillStyle = "#E5E7EB";
-        ctx.fillRect(
-          BADGE_CONFIG.photoArea.x,
-          BADGE_CONFIG.photoArea.y,
-          BADGE_CONFIG.photoArea.width,
-          BADGE_CONFIG.photoArea.height
-        );
+        const drawTexts = () => {
+          // Desenhar nome
+          if (name.trim()) {
+            ctx.font = `${NAME.weight} ${NAME.size}px ${NAME.font}`;
+            ctx.fillStyle = NAME.color;
+            ctx.textAlign = NAME.align;
+            ctx.textBaseline = "middle";
+            ctx.fillText(name.trim(), NAME.x, NAME.y);
+          }
+
+          // Desenhar função
+          if (position.trim()) {
+            ctx.font = `${ROLE.weight} ${ROLE.size}px ${ROLE.font}`;
+            ctx.fillStyle = ROLE.color;
+            ctx.textAlign = ROLE.align;
+            ctx.textBaseline = "middle";
+            ctx.fillText(position.trim(), ROLE.x, ROLE.y);
+          }
+        };
 
         drawComplete();
-      }
+      };
+      bgImage.src = templateImage;
     });
   };
 

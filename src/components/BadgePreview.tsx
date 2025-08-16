@@ -8,33 +8,10 @@ interface BadgePreviewProps {
   templateImage?: string;
 }
 
-// Constantes para posicionamento baseadas no template fornecido
-const BADGE_CONFIG = {
-  width: 400,
-  height: 600,
-  photoArea: {
-    x: 95,
-    y: 200,
-    width: 210,
-    height: 270
-  },
-  nameArea: {
-    x: 200,
-    y: 520,
-    fontSize: 22,
-    fontFamily: "Arial, sans-serif",
-    color: "#FFFFFF",
-    align: "center" as const
-  },
-  positionArea: {
-    x: 200,
-    y: 575,
-    fontSize: 18,
-    fontFamily: "Arial, sans-serif", 
-    color: "#FFFFFF",
-    align: "center" as const
-  }
-};
+// Constantes em percentuais (funcionam para qualquer tamanho)
+const SLOT_PCT = { x: 0.3213, y: 0.2695, w: 0.3565, h: 0.2474 }; // área da FOTO (retângulo cinza do template)
+const NAME_PCT = { x: 0.50, y: 0.710, size: 0.070, weight: 700, color: "#FFFFFF", font: "Arial", align: "center" as const };
+const ROLE_PCT = { x: 0.50, y: 0.800, size: 0.055, weight: 600, color: "#FFFFFF", font: "Arial", align: "center" as const };
 
 export const BadgePreview = ({ photo, name, position }: BadgePreviewProps) => {
   const templateImage = "/template-cracha.png";
@@ -47,63 +24,48 @@ export const BadgePreview = ({ photo, name, position }: BadgePreviewProps) => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Limpar canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Desenhar fundo temporário (até o template ser fornecido)
-    if (!templateImage) {
-      // Gradiente temporário
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, "#3B82F6");
-      gradient.addColorStop(1, "#1E40AF");
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Área da foto (cinza temporário)
-      ctx.fillStyle = "#E5E7EB";
-      ctx.fillRect(
-        BADGE_CONFIG.photoArea.x,
-        BADGE_CONFIG.photoArea.y,
-        BADGE_CONFIG.photoArea.width,
-        BADGE_CONFIG.photoArea.height
-      );
-
-      // Borda da área da foto
-      ctx.strokeStyle = "#9CA3AF";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        BADGE_CONFIG.photoArea.x,
-        BADGE_CONFIG.photoArea.y,
-        BADGE_CONFIG.photoArea.width,
-        BADGE_CONFIG.photoArea.height
-      );
-
-      // Texto de placeholder se não houver foto
-      if (!photo) {
-        ctx.fillStyle = "#6B7280";
-        ctx.font = "16px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(
-          "ÁREA DA FOTO",
-          BADGE_CONFIG.photoArea.x + BADGE_CONFIG.photoArea.width / 2,
-          BADGE_CONFIG.photoArea.y + BADGE_CONFIG.photoArea.height / 2
-        );
-      }
-    } else {
-      // Desenhar template de fundo quando fornecido
-      const bgImage = new Image();
-      bgImage.onload = () => {
-        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
-        drawContent();
+    // Carregar template e definir dimensões do canvas
+    const bgImage = new Image();
+    bgImage.onload = () => {
+      // Definir canvas com tamanho natural do template
+      canvas.width = bgImage.naturalWidth;
+      canvas.height = bgImage.naturalHeight;
+      
+      // Limpar canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Desenhar template de fundo
+      ctx.drawImage(bgImage, 0, 0);
+      
+      // Calcular constantes em pixels baseadas no tamanho do template
+      const W = bgImage.naturalWidth;
+      const H = bgImage.naturalHeight;
+      
+      const SLOT = { 
+        x: Math.round(W * SLOT_PCT.x), 
+        y: Math.round(H * SLOT_PCT.y),
+        w: Math.round(W * SLOT_PCT.w), 
+        h: Math.round(H * SLOT_PCT.h) 
       };
-      bgImage.src = templateImage;
-      return;
-    }
-
-    drawContent();
+      const NAME = { 
+        x: W * NAME_PCT.x, 
+        y: H * NAME_PCT.y, 
+        size: Math.round(W * NAME_PCT.size),
+        ...NAME_PCT 
+      };
+      const ROLE = { 
+        x: W * ROLE_PCT.x, 
+        y: H * ROLE_PCT.y, 
+        size: Math.round(W * ROLE_PCT.size),
+        ...ROLE_PCT 
+      };
+      
+      drawContent(SLOT, NAME, ROLE);
+    };
+    bgImage.src = templateImage;
   };
 
-  const drawContent = () => {
+  const drawContent = (SLOT: any, NAME: any, ROLE: any) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -114,64 +76,58 @@ export const BadgePreview = ({ photo, name, position }: BadgePreviewProps) => {
     if (photo) {
       const img = new Image();
       img.onload = () => {
-        // Calcular crop para manter proporção
-        const { x, y, width, height } = BADGE_CONFIG.photoArea;
-        
-        // Desenhar foto com crop centralizado
+        // Desenhar foto com "cover" (preencher sem distorcer)
         ctx.save();
+        
+        // Criar clip arredondado
+        const radius = Math.min(SLOT.w, SLOT.h) * 0.06;
         ctx.beginPath();
-        ctx.rect(x, y, width, height);
+        ctx.roundRect(SLOT.x, SLOT.y, SLOT.w, SLOT.h, radius);
         ctx.clip();
 
-        const scale = Math.max(width / img.width, height / img.height);
-        const scaledWidth = img.width * scale;
-        const scaledHeight = img.height * scale;
-        const offsetX = (width - scaledWidth) / 2;
-        const offsetY = (height - scaledHeight) / 2;
+        // Calcular escala cover
+        const scale = Math.max(SLOT.w / img.width, SLOT.h / img.height);
+        const dw = Math.ceil(img.width * scale);
+        const dh = Math.ceil(img.height * scale);
+        const dx = SLOT.x + Math.round((SLOT.w - dw) / 2);
+        const dy = SLOT.y + Math.round((SLOT.h - dh) / 2);
 
-        ctx.drawImage(img, x + offsetX, y + offsetY, scaledWidth, scaledHeight);
+        ctx.drawImage(img, dx, dy, dw, dh);
         ctx.restore();
 
         // Desenhar textos após a foto
-        drawTexts();
+        drawTexts(NAME, ROLE);
       };
       img.src = photo;
     } else {
-      drawTexts();
+      drawTexts(NAME, ROLE);
     }
   };
 
-  const drawTexts = () => {
+  const drawTexts = (NAME: any, ROLE: any) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Configurar sombra para texto
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-    ctx.shadowBlur = 2;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-
     // Desenhar nome
     if (name.trim()) {
-      ctx.fillStyle = BADGE_CONFIG.nameArea.color;
-      ctx.font = `${BADGE_CONFIG.nameArea.fontSize}px ${BADGE_CONFIG.nameArea.fontFamily}`;
-      ctx.textAlign = BADGE_CONFIG.nameArea.align;
-      ctx.fillText(name.trim(), BADGE_CONFIG.nameArea.x, BADGE_CONFIG.nameArea.y);
+      ctx.font = `${NAME.weight} ${NAME.size}px ${NAME.font}`;
+      ctx.fillStyle = NAME.color;
+      ctx.textAlign = NAME.align;
+      ctx.textBaseline = "middle";
+      ctx.fillText(name.trim(), NAME.x, NAME.y);
     }
 
     // Desenhar função
     if (position.trim()) {
-      ctx.fillStyle = BADGE_CONFIG.positionArea.color;
-      ctx.font = `${BADGE_CONFIG.positionArea.fontSize}px ${BADGE_CONFIG.positionArea.fontFamily}`;
-      ctx.textAlign = BADGE_CONFIG.positionArea.align;
-      ctx.fillText(position.trim(), BADGE_CONFIG.positionArea.x, BADGE_CONFIG.positionArea.y);
+      ctx.font = `${ROLE.weight} ${ROLE.size}px ${ROLE.font}`;
+      ctx.fillStyle = ROLE.color;
+      ctx.textAlign = ROLE.align;
+      ctx.textBaseline = "middle";
+      ctx.fillText(position.trim(), ROLE.x, ROLE.y);
     }
-
-    // Resetar sombra
-    ctx.shadowColor = "transparent";
   };
 
   useEffect(() => {
@@ -189,8 +145,6 @@ export const BadgePreview = ({ photo, name, position }: BadgePreviewProps) => {
         <div className="bg-white p-4 rounded-lg shadow-medium border border-border">
           <canvas
             ref={canvasRef}
-            width={BADGE_CONFIG.width}
-            height={BADGE_CONFIG.height}
             className="max-w-full h-auto border border-border/50 rounded"
             style={{ maxHeight: "400px" }}
           />
@@ -207,4 +161,4 @@ export const BadgePreview = ({ photo, name, position }: BadgePreviewProps) => {
   );
 };
 
-export { BADGE_CONFIG };
+export { SLOT_PCT, NAME_PCT, ROLE_PCT };
