@@ -8,27 +8,27 @@ interface BadgePreviewProps {
   templateImage?: string;
 }
 
-// Constantes para posicionamento (ajustáveis conforme template)
+// Constantes para posicionamento baseadas no template fornecido
 const BADGE_CONFIG = {
   width: 400,
   height: 600,
   photoArea: {
-    x: 50,
-    y: 80,
-    width: 300,
-    height: 360
+    x: 95,
+    y: 200,
+    width: 210,
+    height: 270
   },
   nameArea: {
     x: 200,
-    y: 460,
-    fontSize: 24,
+    y: 520,
+    fontSize: 22,
     fontFamily: "Arial, sans-serif",
     color: "#FFFFFF",
     align: "center" as const
   },
   positionArea: {
     x: 200,
-    y: 520,
+    y: 575,
     fontSize: 18,
     fontFamily: "Arial, sans-serif", 
     color: "#FFFFFF",
@@ -36,7 +36,8 @@ const BADGE_CONFIG = {
   }
 };
 
-export const BadgePreview = ({ photo, name, position, templateImage }: BadgePreviewProps) => {
+export const BadgePreview = ({ photo, name, position }: BadgePreviewProps) => {
+  const templateImage = "/template-cracha.png";
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const drawBadge = () => {

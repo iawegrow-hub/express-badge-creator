@@ -13,7 +13,8 @@ interface ExportButtonsProps {
   onReset: () => void;
 }
 
-export const ExportButtons = ({ photo, name, position, templateImage, onReset }: ExportButtonsProps) => {
+export const ExportButtons = ({ photo, name, position, onReset }: ExportButtonsProps) => {
+  const templateImage = "/template-cracha.png";
   const isValid = photo && name.trim() && position.trim();
 
   const generateBadgeCanvas = (): Promise<HTMLCanvasElement> => {
